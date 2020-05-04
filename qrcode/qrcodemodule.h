@@ -47,9 +47,8 @@ public:
 	String get_text();
 	void set_error_correction(uint8_t p_error_correction);
 	uint8_t get_error_correction();
-	void set_version(uint8_t p_version);
 	uint8_t get_version();
-	
+
 	QRCodeTexture();
 	virtual ~QRCodeTexture();
 };

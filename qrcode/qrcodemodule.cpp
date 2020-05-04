@@ -30,23 +30,37 @@ Ref<Image> QRCodeTexture::_gen_image(const String &p_data) {
 
 	// Allocate a chunk of memory to store the QR code
 	const char *data = p_data.utf8().get_data();
-	uint8_t qrcodeBytes[qrcode_getBufferSize(version)];
-	qrcode_initText(&qrcode, qrcodeBytes, version, error_correction, data);
+	uint8_t reqVersion = qrcode_getMinVersionForByteLength(error_correction, p_data.utf8().size() - 1);
 
-	int border_size = 1;
-	img->create(qrcode.size+border_size*2, qrcode.size+border_size*2, false, Image::FORMAT_RGB8);
-	img->fill(Color(1, 1, 1));
+	if (reqVersion > 0) {
+		version = reqVersion;
+		uint16_t maxSize = qrcode_getBufferSize(reqVersion);
 
-	img->lock();
-	for (int y = 0; y < qrcode.size; y++) {
-		for (int x = 0; x < qrcode.size; x++) {
-			if (qrcode_getModule(&qrcode, x, y)) {
-				img->set_pixel(x+border_size, y+border_size, Color(0, 0, 0));
+		uint8_t qrcodeBytes[maxSize];
+		int8_t success = qrcode_initText(&qrcode, qrcodeBytes, reqVersion, error_correction, data);
+
+		if (success == 0) {
+			int border_size = 1;
+			img->create(qrcode.size+border_size*2, qrcode.size+border_size*2, false, Image::FORMAT_RGB8);
+			img->fill(Color(1, 1, 1));
+
+			img->lock();
+			for (int y = 0; y < qrcode.size; y++) {
+				for (int x = 0; x < qrcode.size; x++) {
+					if (qrcode_getModule(&qrcode, x, y)) {
+						img->set_pixel(x+border_size, y+border_size, Color(0, 0, 0));
+					}
+				}
 			}
+			img->unlock();
+			return img;
 		}
 	}
-	img->unlock();
-	return img;
+
+	{
+		img->create(1, 1, false, Image::FORMAT_RGB8);
+		return img;
+	}
 }
 
 int QRCodeTexture::get_width() const {
@@ -81,12 +95,6 @@ uint8_t QRCodeTexture::get_error_correction() {
 	return error_correction;
 }
 
-void QRCodeTexture::set_version(uint8_t p_version) {
-	version = p_version;
-	_update();
-	emit_changed();
-}
-
 uint8_t QRCodeTexture::get_version() {
 	return version;
 }
@@ -98,17 +106,13 @@ void QRCodeTexture::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_error_correction", "error_correction"), &QRCodeTexture::set_error_correction);
 	ClassDB::bind_method(D_METHOD("get_error_correction"), &QRCodeTexture::get_error_correction);
 
-	ClassDB::bind_method(D_METHOD("set_version", "version"), &QRCodeTexture::set_version);
 	ClassDB::bind_method(D_METHOD("get_version"), &QRCodeTexture::get_version);
 
-	ADD_PROPERTY(PropertyInfo(Variant::STRING, "text", PROPERTY_HINT_MULTILINE_TEXT), "set_text", "get_text");
+  ADD_PROPERTY(PropertyInfo(Variant::STRING, "text", PROPERTY_HINT_MULTILINE_TEXT), "set_text", "get_text");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "error_correction", PROPERTY_HINT_ENUM, "Low,Medium,Quartile,High"), "set_error_correction", "get_error_correction");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "version", PROPERTY_HINT_RANGE, "1,40,1"), "set_version", "get_version");
 }
 
 QRCodeTexture::QRCodeTexture() {
-	size = Vector2i(21, 21);
-
 	texture = VS::get_singleton()->texture_create();
 	_queue_update();
 }
